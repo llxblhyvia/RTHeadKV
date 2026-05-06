@@ -23,6 +23,14 @@ datasets = [
     'timeline_reorder'
 ]
 
+# Multilingual LongBench (built via data/build_multilingual_longbench.py).
+MLONGBENCH_DATASETS = [
+    'xquad_en', 'xquad_de', 'xquad_zh', 'xquad_es', 'xquad_ar',
+    'xquad_hi', 'xquad_vi', 'xquad_ru', 'xquad_th', 'xquad_tr',
+    'mgsm_en', 'mgsm_de', 'mgsm_sw', 'mgsm_zh', 'mgsm_es',
+    'mgsm_fr', 'mgsm_ja', 'mgsm_ru', 'mgsm_te', 'mgsm_th', 'mgsm_bn',
+]
+
 
 dataset2maxlen = {
     "narrativeqa": 128,
@@ -52,6 +60,14 @@ dataset2maxlen = {
     'computation': 32,
 }
 
+# XQuAD answers are short spans; MGSM answers are short numerical strings.
+for _ds in ('xquad_en', 'xquad_de', 'xquad_zh', 'xquad_es', 'xquad_ar',
+            'xquad_hi', 'xquad_vi', 'xquad_ru', 'xquad_th', 'xquad_tr'):
+    dataset2maxlen[_ds] = 48
+for _ds in ('mgsm_en', 'mgsm_de', 'mgsm_sw', 'mgsm_zh', 'mgsm_es',
+            'mgsm_fr', 'mgsm_ja', 'mgsm_ru', 'mgsm_te', 'mgsm_th', 'mgsm_bn'):
+    dataset2maxlen[_ds] = 256
+
 model2prompt = {
     "narrativeqa": "You are given a story, which can be either a novel or a movie script, and a question. Answer the question asconcisely as you can, using a single phrase if possible. Do not provide any explanation.\n\nStory: {context}\n\nNow, answer the question based on the story asconcisely as you can, using a single phrase if possible. Do not provide any explanation.\n\nQuestion: {input}\n\nAnswer:",
     "qasper": "You are given a scientific article and a question. Answer the question as concisely as you can, using a single phrase or sentence if possible. If the question cannot be answered based on the information in the article, write \"unanswerable\". If the question is a yes/no question, answer \"yes\", \"no\", or \"unanswerable\". Do not provide any explanation.\n\nArticle: {context}\n\n Answer the question based on the above article as concisely as you can, using a single phrase or sentence if possible. If the question cannot be answered based on the information in the article, write \"unanswerable\". If the question is a yes/no question, answer \"yes\", \"no\", or \"unanswerable\". Do not provide any explanation.\n\nQuestion: {input}\n\nAnswer:",
@@ -80,6 +96,42 @@ model2prompt = {
     "lcc": "Please complete the code given below. \n{context}Next line of code:\n",
     "repobench-p": "Please complete the code given below. \n{context}{input}Next line of code:\n"
 }
+
+# Multilingual prompts. XQuAD-style: short extractive answer in the same
+# language as the question. MGSM-style: solve the *target* problem only.
+_XQUAD_PROMPTS = {
+    'en': "Read the passages below and answer the question with a short span copied from the passages. Do not output any other words.\n\nPassages:\n{context}\n\nQuestion: {input}\nAnswer:",
+    'de': "Lies die folgenden Absätze und beantworte die Frage mit einer kurzen Phrase, die wörtlich aus dem Text stammt. Gib keine zusätzlichen Wörter aus.\n\nAbsätze:\n{context}\n\nFrage: {input}\nAntwort:",
+    'zh': "请阅读下面的段落，并用段落中出现的简短文字回答问题，不要输出任何其他内容。\n\n段落：\n{context}\n\n问题：{input}\n答案：",
+    'es': "Lee los siguientes párrafos y responde la pregunta con una frase corta tomada del texto. No incluyas ninguna otra palabra.\n\nPárrafos:\n{context}\n\nPregunta: {input}\nRespuesta:",
+    'ar': "اقرأ الفقرات التالية وأجب عن السؤال بعبارة قصيرة منقولة من النص. لا تكتب أي شيء آخر.\n\nالفقرات:\n{context}\n\nالسؤال: {input}\nالإجابة:",
+    'hi': "नीचे दिए गए अनुच्छेदों को पढ़ें और प्रश्न का उत्तर पाठ से लिए गए संक्षिप्त वाक्यांश में दें। कोई अन्य शब्द न लिखें।\n\nअनुच्छेद:\n{context}\n\nप्रश्न: {input}\nउत्तर:",
+    'vi': "Đọc các đoạn văn dưới đây và trả lời câu hỏi bằng một cụm từ ngắn lấy từ văn bản. Không xuất ra bất kỳ từ nào khác.\n\nVăn bản:\n{context}\n\nCâu hỏi: {input}\nTrả lời:",
+    'ru': "Прочитайте отрывки ниже и ответьте на вопрос короткой фразой, взятой из текста. Не выводите ничего другого.\n\nОтрывки:\n{context}\n\nВопрос: {input}\nОтвет:",
+    'th': "อ่านข้อความด้านล่างและตอบคำถามด้วยข้อความสั้นๆ ที่คัดมาจากเนื้อหา ห้ามพิมพ์อย่างอื่น\n\nข้อความ:\n{context}\n\nคำถาม: {input}\nคำตอบ:",
+    'tr': "Aşağıdaki paragrafları oku ve soruyu metinden alınmış kısa bir ifade ile cevapla. Başka hiçbir şey yazma.\n\nParagraflar:\n{context}\n\nSoru: {input}\nCevap:",
+}
+_MGSM_PROMPTS = {
+    'en': "You are given many math problems. Solve ONLY the target problem at the end. Output just the final numeric answer.\n\n{context}\n\nFinal numeric answer:",
+    'de': "Dir werden viele Matheaufgaben gegeben. Löse NUR die Zielaufgabe am Ende. Gib nur die endgültige Zahl als Antwort aus.\n\n{context}\n\nEndgültige Zahl:",
+    'zh': "下面给出了许多数学题。只回答最后标记的“目标题目”。只输出最终的数字答案。\n\n{context}\n\n最终数字答案：",
+    'sw': "Umepewa matatizo mengi ya hesabu. Tatua TU swali lengo lililo mwishoni. Toa jibu la nambari pekee.\n\n{context}\n\nJibu la nambari:",
+    'es': "Se te dan muchos problemas matemáticos. Resuelve SOLO el problema objetivo al final. Devuelve únicamente la respuesta numérica final.\n\n{context}\n\nRespuesta numérica final:",
+    'fr': "Plusieurs problèmes de mathématiques te sont donnés. Résous UNIQUEMENT le problème cible à la fin. Donne uniquement la réponse numérique finale.\n\n{context}\n\nRéponse numérique finale :",
+    'ja': "多くの算数の問題が与えられています。最後の「目標問題」だけを解いてください。最終的な数値だけを出力してください。\n\n{context}\n\n最終的な数値:",
+    'ru': "Тебе даны много математических задач. Реши ТОЛЬКО целевую задачу в конце. Выведи только итоговое число.\n\n{context}\n\nИтоговое число:",
+    'te': "మీకు చాలా గణిత సమస్యలు ఇవ్వబడ్డాయి. చివర్లో ఉన్న లక్ష్య సమస్యను మాత్రమే పరిష్కరించండి. చివరి సంఖ్యను మాత్రమే ఇవ్వండి.\n\n{context}\n\nచివరి సంఖ్య:",
+    'th': "คุณได้รับโจทย์เลขจำนวนมาก จงแก้เฉพาะโจทย์เป้าหมายที่อยู่ตอนท้ายเท่านั้น ตอบเฉพาะตัวเลขสุดท้าย\n\n{context}\n\nตัวเลขคำตอบ:",
+    'bn': "আপনাকে অনেক গণিত সমস্যা দেওয়া হয়েছে। শুধু শেষের লক্ষ্য সমস্যাটি সমাধান করুন। শুধু চূড়ান্ত সংখ্যা উত্তর হিসেবে দিন।\n\n{context}\n\nচূড়ান্ত সংখ্যা:",
+}
+
+for _ds in MLONGBENCH_DATASETS:
+    if _ds.startswith('xquad_'):
+        _lang = _ds.split('_', 1)[1]
+        model2prompt[_ds] = _XQUAD_PROMPTS.get(_lang, _XQUAD_PROMPTS['en'])
+    elif _ds.startswith('mgsm_'):
+        _lang = _ds.split('_', 1)[1]
+        model2prompt[_ds] = _MGSM_PROMPTS.get(_lang, _MGSM_PROMPTS['en'])
 
 
 model2maxlen = {
@@ -217,6 +269,7 @@ def main(args):
         model.model.config.window_size = 8
         model.model.config.base_capacity = args.max_capacity_prompts
         model.model.config.head_choice = args.head_choice
+        model.model.config.fuse_heads = args.fuse_heads
         model.model.config.beta = args.beta
         model.model.config.temp = args.temp
         
@@ -294,12 +347,49 @@ if __name__ == "__main__":
     parser.add_argument("--method", type=str,  default=None)
     parser.add_argument("--max_capacity_prompts", type=int, default=512, help="")
 
-    parser.add_argument("--head_choice", type=str, default='random', choices=['random', 'copy', 'reason'])
+    parser.add_argument(
+        "--head_choice",
+        type=str,
+        default='random',
+        choices=[
+            'random', 'copy', 'reason',
+            # single RTH (Retrieval-Transition Head) files
+            'trans_ende', 'trans_ensw', 'trans_enzh', 'trans_zhen',
+            # fusion modes (see headkv/snapkv_utils.py:FUSE_RECIPES)
+            'fuse', 'fuse_rth', 'fuse_rth_zh', 'fuse_rth_all', 'rth_only',
+        ],
+    )
+    parser.add_argument(
+        "--fuse_heads",
+        type=str,
+        default=None,
+        help=(
+            "Only used when --head_choice=fuse. Comma-separated list of head-score "
+            "keys to average, e.g. 'llama_copy,trans_ende,trans_ensw'. Keys are "
+            "defined in headkv/snapkv_utils.py:HEAD_SCORE_FILES."
+        ),
+    )
     parser.add_argument('--beta', type=float, default=1.5)
     parser.add_argument('--temp', type=float, default=1.0)
 
     parser.add_argument("--max_capacity_prompts_ratio", type=float, default=-1, help="")
     parser.add_argument("--steps", type=int, default=-1, help="maximum number of examples to evaluate per task.")
+    parser.add_argument(
+        "--datasets",
+        type=str,
+        default=None,
+        help=(
+            "Comma-separated list of dataset names to override the default "
+            "LongBench list. Use this to run the multilingual LongBench, e.g. "
+            "'xquad_en,xquad_de,xquad_zh,mgsm_de,mgsm_sw'."
+        ),
+    )
+    parser.add_argument(
+        "--data_dir",
+        type=str,
+        default="./data/LongBench",
+        help="Directory containing <dataset>.jsonl files.",
+    )
     
     parser.add_argument(
         "--use_chat_format", 
@@ -365,13 +455,17 @@ if __name__ == "__main__":
 
         
 
-    for idx, dataset in enumerate(datasets):
-        
-        print(f"Working on max_capacity_prompts {args.max_capacity_prompts} dataset {dataset} - {idx}/{len(datasets)}")
+    if args.datasets:
+        run_datasets = [d.strip() for d in args.datasets.split(',') if d.strip()]
+    else:
+        run_datasets = datasets
+
+    for idx, dataset in enumerate(run_datasets):
+
+        print(f"Working on max_capacity_prompts {args.max_capacity_prompts} dataset {dataset} - {idx}/{len(run_datasets)}")
         print(f'base capacity: {args.max_capacity_prompts}\thead_choice:{args.head_choice}\tbeta:{args.beta}\ttemp:{args.temp}')
 
         args.dataset = dataset
-        
-        args.data_file = f"./data/LongBench/{args.dataset}.jsonl"
-        
+        args.data_file = f"{args.data_dir}/{args.dataset}.jsonl"
+
         main(args)

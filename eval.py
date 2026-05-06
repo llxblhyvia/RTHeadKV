@@ -7,6 +7,8 @@ from metrics import (
     qa_f1_score,
     rouge_zh_score,
     qa_f1_zh_score,
+    qa_f1_unicode_score,
+    mgsm_score,
     rouge_score,
     classification_score,
     retrieval_score,
@@ -29,12 +31,28 @@ dataset2metric = {
     'timeline_reorder': qa_f1_score,
 }
 
+# Multilingual LongBench scoring.
+dataset2metric['xquad_en'] = qa_f1_score
+dataset2metric['xquad_zh'] = qa_f1_zh_score
+for _ds in ('xquad_de', 'xquad_es', 'xquad_ar', 'xquad_hi', 'xquad_vi',
+            'xquad_ru', 'xquad_th', 'xquad_tr'):
+    dataset2metric[_ds] = qa_f1_unicode_score
+for _ds in ('mgsm_en', 'mgsm_de', 'mgsm_sw', 'mgsm_zh', 'mgsm_es',
+            'mgsm_fr', 'mgsm_ja', 'mgsm_ru', 'mgsm_te', 'mgsm_th', 'mgsm_bn'):
+    dataset2metric[_ds] = mgsm_score
+
 def parse_args(args=None):
     parser = argparse.ArgumentParser()
     parser.add_argument('--results_dir', type=str, default=None)
     parser.add_argument('--model', type=str, default='meta-llama-3-8b-instruct')
     parser.add_argument('--capacity', type=int, default=128)
     parser.add_argument('--longbench_e', action='store_true', help="Evaluate on LongBench-E")
+    parser.add_argument(
+        '--datasets',
+        type=str,
+        default=None,
+        help="Comma-separated list of dataset names to score (overrides default).",
+    )
     return parser.parse_args(args)
 
 def scorer_e(dataset, predictions, answers, lengths, all_classes):
@@ -69,19 +87,22 @@ def scorer(dataset, predictions, answers, all_classes):
 if __name__ == '__main__':
     args = parse_args()
     args.results_dir = f"{args.results_dir}/{args.model}_{args.capacity}"
-    dataset_list = [
-        "narrativeqa",
-        "qasper",
-        "multifieldqa_en",
-        "hotpotqa",
-        "2wikimqa",
-        "musique",
+    if args.datasets:
+        dataset_list = [d.strip() for d in args.datasets.split(',') if d.strip()]
+    else:
+        dataset_list = [
+            "narrativeqa",
+            "qasper",
+            "multifieldqa_en",
+            "hotpotqa",
+            "2wikimqa",
+            "musique",
 
-        'comprehension_and_reasoning',
-        'computation',
-        'multiple_information_retrieval',
-        'timeline_reorder'
-        ]
+            'comprehension_and_reasoning',
+            'computation',
+            'multiple_information_retrieval',
+            'timeline_reorder'
+            ]
     
     results_list = [
         ["dataset"],

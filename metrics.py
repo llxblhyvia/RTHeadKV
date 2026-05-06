@@ -156,3 +156,45 @@ def qa_f1_zh_score(prediction, ground_truth, **kwargs):
     prediction_tokens = [token for token in prediction_tokens if len(token) > 0]
     ground_truth_tokens = [token for token in ground_truth_tokens if len(token) > 0]
     return f1_score(prediction_tokens, ground_truth_tokens)
+
+
+def _normalize_unicode_answer(s):
+    """Lowercase + strip unicode punctuation/extra whitespace.
+
+    Used for XQuAD F1 in languages whose answers aren't English / Chinese
+    (e.g. de, es, ru, vi, tr, hi). Keeps unicode word characters intact, which
+    `string.punctuation` from `normalize_answer` would otherwise miss.
+    """
+    s = s.lower()
+    s = re.sub(r"[^\w\s]", " ", s, flags=re.UNICODE)
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
+
+
+def qa_f1_unicode_score(prediction, ground_truth, **kwargs):
+    pred_tokens = _normalize_unicode_answer(prediction).split()
+    gold_tokens = _normalize_unicode_answer(ground_truth).split()
+    return f1_score(pred_tokens, gold_tokens)
+
+
+_NUMBER_RE = re.compile(r"-?\d+(?:[.,]\d+)?")
+
+
+def _extract_last_number(text):
+    text = text.replace(",", "")
+    matches = _NUMBER_RE.findall(text)
+    if not matches:
+        return None
+    try:
+        return float(matches[-1])
+    except ValueError:
+        return None
+
+
+def mgsm_score(prediction, ground_truth, **kwargs):
+    """Exact-match on the final numeric value (matches the MGSM convention)."""
+    p = _extract_last_number(prediction)
+    g = _extract_last_number(ground_truth)
+    if p is None or g is None:
+        return 0.0
+    return 1.0 if abs(p - g) < 1e-6 else 0.0

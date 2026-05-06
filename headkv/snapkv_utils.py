@@ -339,8 +339,98 @@ class AdaptiveSnapKVCluster():
 
 
 
+HEAD_SCORE_FILES = {
+    # Original retrieval / retrieval-reasoning heads
+    'llama_copy': 'Meta-Llama-3-8B-Instruct_retrieval_heads.json',
+    'llama_reason': 'Meta-Llama-3-8B-Instruct_retrieval_reasoning_heads.json',
+    'mistral_copy': 'Mistral-7B-Instruct-v0.2_retrieval_heads.json',
+    'mistral_reason': 'Mistral-7B-Instruct-v0.2_retrieval_reasoning_heads.json',
+    # Retrieval-Transition Heads (RTH) for Llama-3.1-8B-Instruct
+    'trans_ende': 'llama31_8b_inst_trans_ende.json',
+    'trans_ensw': 'llama31_8b_inst_trans_ensw.json',
+    'trans_enzh': 'llama31_8b_inst_trans_enzh.json',
+    'trans_zhen': 'llama31_8b_inst_trans_zhen.json',
+}
+
+# Default fusion recipes. A recipe is a list of file keys whose normalized
+# head-score vectors are averaged (equal weight) to produce a fused score.
+FUSE_RECIPES = {
+    # original retrieval + en->de + en->sw transition heads
+    'fuse_rth': ['llama_copy', 'trans_ende', 'trans_ensw'],
+    'fuse_rth_zh': ['llama_copy', 'trans_enzh', 'trans_zhen'],
+    'fuse_rth_all': ['llama_copy', 'trans_ende', 'trans_ensw', 'trans_enzh', 'trans_zhen'],
+    # only RTH (no original retrieval head) — used for the "完全替代" baseline
+    'rth_only': ['trans_ende', 'trans_ensw'],
+}
+
+
+def _load_head_score_vector(path):
+    """Load a head-score JSON and return a 1-D normalized torch tensor."""
+    with open(path, 'r') as file:
+        head_list = json.loads(file.readline())
+    head_score_list = [np.mean(l[1]) for l in head_list.items()]
+    head_score_list = np.asarray(head_score_list, dtype=np.float64)
+    s = head_score_list.sum()
+    if s > 0:
+        head_score_list = head_score_list / s
+    return torch.tensor(head_score_list, dtype=torch.float64)
+
+
+def _resolve_head_score_paths(head_choice, fuse_heads, model, root_path):
+    """Return the list of head-score JSON paths to load + fuse.
+
+    Behaviour:
+      - 'copy' / 'reason': dispatch by model family (back-compat).
+      - 'trans_ende' / 'trans_ensw' / 'trans_enzh' / 'trans_zhen': load that single
+        RTH file (Llama-3.1 only).
+      - 'fuse' or any FUSE_RECIPES key: load all files in the recipe and average.
+        When head_choice == 'fuse', `fuse_heads` (comma-separated keys) overrides
+        the default 'fuse_rth' recipe.
+    """
+    score_dir = f'{root_path}/Important_Head/head_score'
+
+    def _path(key):
+        return f'{score_dir}/{HEAD_SCORE_FILES[key]}'
+
+    if head_choice == 'random':
+        raise ValueError("head_choice='random' is not supported here.")
+
+    if head_choice == 'copy':
+        if 'llama' in model.lower():
+            return [_path('llama_copy')]
+        if 'mistral' in model.lower():
+            return [_path('mistral_copy')]
+        raise ValueError(f"Unsupported model for head_choice=copy: {model}")
+
+    if head_choice == 'reason':
+        if 'llama' in model.lower():
+            return [_path('llama_reason')]
+        if 'mistral' in model.lower():
+            return [_path('mistral_reason')]
+        raise ValueError(f"Unsupported model for head_choice=reason: {model}")
+
+    if head_choice in HEAD_SCORE_FILES:
+        return [_path(head_choice)]
+
+    if head_choice == 'fuse':
+        keys = None
+        if fuse_heads:
+            keys = [k.strip() for k in fuse_heads.split(',') if k.strip()]
+        if not keys:
+            keys = FUSE_RECIPES['fuse_rth']
+        for k in keys:
+            if k not in HEAD_SCORE_FILES:
+                raise ValueError(f"Unknown fuse component: {k}")
+        return [_path(k) for k in keys]
+
+    if head_choice in FUSE_RECIPES:
+        return [_path(k) for k in FUSE_RECIPES[head_choice]]
+
+    raise ValueError(f"Unknown head_choice: {head_choice}")
+
+
 class ReasonSnapKVCluster():
-    def __init__(self, window_size = 32, kernel_size = 7, pooling = 'maxpool',base_capacity=None, head_choice=None, beta=None, temp=None, layer_idx = None, num_hidden_layers = None, num_attention_heads=None, model=None):
+    def __init__(self, window_size = 32, kernel_size = 7, pooling = 'maxpool',base_capacity=None, head_choice=None, beta=None, temp=None, layer_idx = None, num_hidden_layers = None, num_attention_heads=None, model=None, fuse_heads=None):
         self.window_size = window_size
         self.kernel_size = kernel_size
         self.pooling = pooling
@@ -360,26 +450,18 @@ class ReasonSnapKVCluster():
         self.cu_headlens = None
 
         root_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        if head_choice == 'random':
-            raise ValueError
-        elif head_choice == 'copy':
-            if 'llama' in model.lower():
-                path = f'{root_path}/Important_Head/head_score/Meta-Llama-3-8B-Instruct_retrieval_heads.json'
-            elif 'mistral' in model.lower():
-                path = f'{root_path}/Important_Head/head_score/Mistral-7B-Instruct-v0.2_retrieval_heads.json'
-            else:
-                raise ValueError
-        elif head_choice == 'reason':
-            if 'llama' in model.lower():
-                path = f'{root_path}/Important_Head/head_score/Meta-Llama-3-8B-Instruct_retrieval_reasoning_heads.json'
-            elif 'mistral' in model.lower():
-                path = f'{root_path}/Important_Head/head_score/Mistral-7B-Instruct-v0.2_retrieval_reasoning_heads.json'
-            else:
-                raise ValueError
-        with open(path, 'r') as file:
-            head_list = json.loads(file.readline())
-        head_score_list = [np.mean(l[1]) for l in head_list.items()]
-        head_score_list = torch.tensor(head_score_list / sum(head_score_list))
+        paths = _resolve_head_score_paths(head_choice, fuse_heads, model, root_path)
+
+        # Load each component as an already-normalized vector and average them.
+        # This is the "fusion = sum and average" recipe (equal-weight mean of
+        # normalized head-score distributions).
+        vectors = [_load_head_score_vector(p) for p in paths]
+        if self.layer_idx == 0:
+            print(f"[ReasonSnapKV] head_choice={head_choice} loaded {len(vectors)} score file(s):")
+            for p in paths:
+                print(f"  - {p}")
+        head_score_list = torch.stack(vectors, dim=0).mean(dim=0)
+        head_score_list = head_score_list / torch.sum(head_score_list)
         head_score_list = torch.pow(head_score_list, self.temp)
         head_score_list = head_score_list / torch.sum(head_score_list)
         self.total_attention = head_score_list.reshape(self.num_hidden_layers, self.num_attention_heads)
@@ -550,7 +632,8 @@ def init_reason_snapkv(self):
             layer_idx = self.layer_idx,
             num_hidden_layers = self.config.num_hidden_layers,
             num_attention_heads=self.config.num_attention_heads,
-            model=self.config._name_or_path
+            model=self.config._name_or_path,
+            fuse_heads=getattr(self.config, 'fuse_heads', None),
             )
 
 

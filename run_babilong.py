@@ -114,6 +114,7 @@ def main(args):
             model.model.config.window_size = 8
             model.model.config.base_capacity = args.max_capacity_prompts
             model.model.config.head_choice = args.head_choice
+            model.model.config.fuse_heads = args.fuse_heads
             model.model.config.beta = args.beta
             model.model.config.temp = args.temp
             model.model.config.kernel_size = 7
@@ -172,7 +173,24 @@ if __name__ == "__main__":
     parser.add_argument("--attn_implementation", type=str,  default="flash_attention_2", choices=["flash_attention_2", "sdpa", "eager"])
     parser.add_argument("--method", type=str,  default=None)
     parser.add_argument("--max_capacity_prompts", type=int, default=512, help="")
-    parser.add_argument("--head_choice", type=str, default='random', choices=['random', 'copy', 'musique', 'reason', 'mix', 'mix_top1', 'musique_top1', 'mix_top3', 'musique_top3', 'merge', 'final', 'reason', 'final_reason', 'final_merge'])
+    parser.add_argument(
+        "--head_choice",
+        type=str,
+        default='random',
+        choices=[
+            'random', 'copy', 'musique', 'reason',
+            'mix', 'mix_top1', 'musique_top1', 'mix_top3', 'musique_top3',
+            'merge', 'final', 'final_reason', 'final_merge',
+            'trans_ende', 'trans_ensw', 'trans_enzh', 'trans_zhen',
+            'fuse', 'fuse_rth', 'fuse_rth_zh', 'fuse_rth_all', 'rth_only',
+        ],
+    )
+    parser.add_argument(
+        "--fuse_heads",
+        type=str,
+        default=None,
+        help="Comma-separated head keys for --head_choice=fuse (see snapkv_utils.HEAD_SCORE_FILES)",
+    )
     parser.add_argument('--beta', type=float, default=1.5)
     parser.add_argument('--temp', type=float, default=1.0)
 

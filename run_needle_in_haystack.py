@@ -186,6 +186,7 @@ class LLMNeedleHaystackTester:
         self.model.model.config.base_capacity = args.max_capacity_prompts
         self.model.model.config.aug_capacity = args.aug_capacity
         self.model.model.config.head_choice = args.head_choice
+        self.model.model.config.fuse_heads = args.fuse_heads
         self.model.model.config.top_num = args.top_num
         self.model.model.config.beta = args.beta
         self.model.model.config.temp = args.temp
@@ -506,7 +507,23 @@ if __name__ == "__main__":
     parser.add_argument('--seed', type=int, default=42)
     
     parser.add_argument("--aug_capacity", type=int, default=-1, help='-1 means use the full kv cache')
-    parser.add_argument("--head_choice", type=str, default='random', choices=['random', 'copy', 'musique', 'reason', 'mix', 'mix_top3', 'musique_top3', 'merge', 'final', 'final_reason_top3', 'final_copy'])
+    parser.add_argument(
+        "--head_choice",
+        type=str,
+        default='random',
+        choices=[
+            'random', 'copy', 'musique', 'reason', 'mix', 'mix_top3', 'musique_top3',
+            'merge', 'final', 'final_reason_top3', 'final_copy',
+            'trans_ende', 'trans_ensw', 'trans_enzh', 'trans_zhen',
+            'fuse', 'fuse_rth', 'fuse_rth_zh', 'fuse_rth_all', 'rth_only',
+        ],
+    )
+    parser.add_argument(
+        "--fuse_heads",
+        type=str,
+        default=None,
+        help="Comma-separated head keys for --head_choice=fuse (see snapkv_utils.HEAD_SCORE_FILES)",
+    )
     parser.add_argument("--top_num", type=int, default=10)
     parser.add_argument('--beta', type=float, default=1.5)
     parser.add_argument('--temp', type=float, default=1.0)
